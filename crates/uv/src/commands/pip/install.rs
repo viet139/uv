@@ -7,8 +7,8 @@ use tracing::{Level, debug, enabled, warn};
 use uv_cache::Cache;
 use uv_client::{BaseClientBuilder, FlatIndexClient, RegistryClientBuilder};
 use uv_configuration::{
-    BuildIsolation, BuildOptions, Concurrency, Constraints, DryRun, ExtrasSpecification,
-    HashCheckingMode, IndexStrategy, NoSources, Reinstall, Upgrade,
+    BuildIsolation, BuildOptions, Concurrency, Constraints, DryRun, EditableMode,
+    ExtrasSpecification, HashCheckingMode, IndexStrategy, NoSources, Reinstall, Upgrade,
 };
 use uv_configuration::{KeyringProviderType, TargetTriple};
 use uv_dispatch::{BuildDispatch, SharedState};
@@ -40,6 +40,7 @@ use uv_warnings::warn_user;
 use uv_workspace::WorkspaceCache;
 use uv_workspace::pyproject::ExtraBuildDependencies;
 
+use crate::commands::editable::apply_editable_mode;
 use crate::commands::pip::loggers::{DefaultInstallLogger, DefaultResolveLogger, InstallLogger};
 use crate::commands::pip::operations::Modifications;
 use crate::commands::pip::operations::{report_interpreter, report_target_environment};
@@ -61,6 +62,7 @@ pub(crate) async fn pip_install(
     overrides_from_workspace: Vec<Requirement>,
     excludes_from_workspace: Vec<uv_normalize::PackageName>,
     build_constraints_from_workspace: Vec<Requirement>,
+    editable: Option<EditableMode>,
     extras: &ExtrasSpecification,
     groups: &GroupsSpecification,
     resolution_mode: ResolutionMode,
@@ -580,6 +582,9 @@ pub(crate) async fn pip_install(
 
         (resolution, hasher)
     };
+
+    // If necessary, convert editable distributions to non-editable.
+    let resolution = apply_editable_mode(resolution, editable);
 
     // Constrain any build requirements marked as `match-runtime = true`.
     let extra_build_requires = extra_build_requires.match_runtime(&resolution)?;
