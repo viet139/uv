@@ -321,15 +321,14 @@ dependencies = [
 
 [[package]]
 name = "astral_async_zip"
-version = "0.0.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab72a761e6085828cc8f0e05ed332b2554701368c5dc54de551bfaec466518ba"
+version = "0.0.18-rc2"
+source = "git+https://github.com/astral-sh/rs-async-zip.git?tag=v0.0.18-rc2#8eb9ed214128e6db76dc753bca43908f71e569a9"
 dependencies = [
  "async-compression",
  "crc32fast",
  "futures-lite",
  "pin-project",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-util",
 ]
@@ -5750,6 +5749,7 @@ dependencies = [
  "assert_cmd",
  "assert_fs",
  "astral-version-ranges",
+ "astral_async_zip",
  "axoupdater",
  "backon",
  "base64 0.22.1",
@@ -6012,10 +6012,12 @@ name = "uv-build-backend"
 version = "0.0.47"
 dependencies = [
  "astral-version-ranges",
+ "astral_async_zip",
  "base64 0.22.1",
  "csv",
  "flate2",
  "fs-err",
+ "futures-lite",
  "globset",
  "indexmap",
  "indoc",
@@ -6429,7 +6431,6 @@ dependencies = [
  "uv-warnings",
  "uv-workspace",
  "walkdir",
- "zip",
 ]
 
 [[package]]
@@ -6497,6 +6498,7 @@ dependencies = [
  "astral_async_zip",
  "async-compression",
  "blake2",
+ "flate2",
  "fs-err",
  "futures",
  "md-5",
@@ -6515,7 +6517,6 @@ dependencies = [
  "uv-static",
  "uv-warnings",
  "xz2",
- "zip",
 ]
 
 [[package]]
@@ -6752,7 +6753,6 @@ dependencies = [
  "uv-distribution-filename",
  "uv-normalize",
  "uv-pypi-types",
- "zip",
 ]
 
 [[package]]
@@ -7352,7 +7352,9 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "assert_fs",
+ "astral_async_zip",
  "fs-err",
+ "futures-lite",
  "goblin",
  "rcgen",
  "tempfile",
@@ -7360,7 +7362,6 @@ dependencies = [
  "uv-fs",
  "which",
  "windows",
- "zip",
 ]
 
 [[package]]
