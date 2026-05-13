@@ -286,6 +286,7 @@ webpki-root-certs = { version = "1" }
 which = { version = "8.0.0", features = ["regex"] }
 windows = { version = "0.61.0", features = [
   "std",
+  "Win32_Devices_DeviceAndDriverInstallation",
   "Win32_Foundation",
   "Win32_Globalization",
   "Win32_Security",
@@ -305,7 +306,6 @@ windows = { version = "0.61.0", features = [
 windows-registry = { version = "0.5.0" }
 windows-version = { version = "0.1.6" }
 wiremock = { version = "0.6.4" }
-wmi = { version = "0.18.3", default-features = false }
 xz2 = { version = "0.1.7", features = ["static"] }
 zeroize = { version = "1.8.1" }
 
