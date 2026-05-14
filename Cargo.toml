@@ -49,6 +49,7 @@ uv-keyring = { version = "0.0.47", path = "crates/uv-keyring" }
 uv-logging = { version = "0.0.47", path = "crates/uv-logging" }
 uv-macros = { version = "0.0.47", path = "crates/uv-macros" }
 uv-metadata = { version = "0.0.47", path = "crates/uv-metadata" }
+uv-netrc = { version = "0.0.47", path = "crates/uv-netrc" }
 uv-normalize = { version = "0.0.47", path = "crates/uv-normalize" }
 uv-once-map = { version = "0.0.47", path = "crates/uv-once-map" }
 uv-options-metadata = { version = "0.0.47", path = "crates/uv-options-metadata" }
@@ -229,7 +230,6 @@ reqwest-retry = { version = "0.9.1", package = "astral-reqwest-retry", features 
 ] }
 rkyv = { version = "0.8.14", features = ["bytecheck"] }
 rmp-serde = { version = "1.3.0" }
-rust-netrc = { version = "0.1.2" }
 rustc-hash = { version = "2.0.0" }
 rustls-native-certs = { version = "0.8.3" }
 rustls-pki-types = { version = "1.14.0" }
@@ -242,6 +242,11 @@ same-file = { version = "1.0.6" }
 schemars = { version = "1.0.0", features = ["url2"] }
 seahash = { version = "4.1.0" }
 secret-service = { version = "5.0.0", features = ["rt-tokio-crypto-rust"] }
+shellexpand = { version = "3.1.0", default-features = false, features = [
+  "base-0",
+  "tilde",
+  "path",
+] }
 security-framework = { version = "3" }
 self-replace = { version = "1.5.0" }
 serde = { version = "1.0.210", features = ["derive", "rc"] }
