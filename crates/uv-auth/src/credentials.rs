@@ -9,15 +9,18 @@ use base64::read::DecoderReader;
 use base64::write::EncoderWriter;
 use http::Uri;
 use reqsign::aws::DefaultSigner as AwsDefaultSigner;
+use reqsign::azure::DefaultSigner as AzureDefaultSigner;
 use reqsign::google::DefaultSigner as GcsDefaultSigner;
 use reqwest::Request;
-use reqwest::header::HeaderValue;
+use reqwest::header::{HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
 use uv_netrc::Netrc;
 use uv_redacted::DisplaySafeUrl;
 use uv_static::EnvVars;
+
+const AZURE_STORAGE_VERSION: &str = "2023-11-03";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Credentials {
@@ -393,6 +396,9 @@ pub(crate) enum Authentication {
 
     /// Google Cloud signing.
     GcsSigner(GcsDefaultSigner),
+
+    /// Azure Storage signing.
+    AzureSigner(AzureDefaultSigner),
 }
 
 impl PartialEq for Authentication {
@@ -401,6 +407,7 @@ impl PartialEq for Authentication {
             (Self::Credentials(a), Self::Credentials(b)) => a == b,
             (Self::AwsSigner(..), Self::AwsSigner(..)) => true,
             (Self::GcsSigner(..), Self::GcsSigner(..)) => true,
+            (Self::AzureSigner(..), Self::AzureSigner(..)) => true,
             _ => false,
         }
     }
@@ -426,12 +433,18 @@ impl From<GcsDefaultSigner> for Authentication {
     }
 }
 
+impl From<AzureDefaultSigner> for Authentication {
+    fn from(signer: AzureDefaultSigner) -> Self {
+        Self::AzureSigner(signer)
+    }
+}
+
 impl Authentication {
     /// Return the password used for authentication, if any.
     pub(crate) fn password(&self) -> Option<&str> {
         match self {
             Self::Credentials(credentials) => credentials.password(),
-            Self::AwsSigner(..) | Self::GcsSigner(..) => None,
+            Self::AwsSigner(..) | Self::GcsSigner(..) | Self::AzureSigner(..) => None,
         }
     }
 
@@ -439,7 +452,7 @@ impl Authentication {
     pub(crate) fn username(&self) -> Option<&str> {
         match self {
             Self::Credentials(credentials) => credentials.username(),
-            Self::AwsSigner(..) | Self::GcsSigner(..) => None,
+            Self::AwsSigner(..) | Self::GcsSigner(..) | Self::AzureSigner(..) => None,
         }
     }
 
@@ -447,7 +460,9 @@ impl Authentication {
     pub(crate) fn as_username(&self) -> Cow<'_, Username> {
         match self {
             Self::Credentials(credentials) => credentials.as_username(),
-            Self::AwsSigner(..) | Self::GcsSigner(..) => Cow::Owned(Username::none()),
+            Self::AwsSigner(..) | Self::GcsSigner(..) | Self::AzureSigner(..) => {
+                Cow::Owned(Username::none())
+            }
         }
     }
 
@@ -455,7 +470,7 @@ impl Authentication {
     pub(crate) fn to_username(&self) -> Username {
         match self {
             Self::Credentials(credentials) => credentials.to_username(),
-            Self::AwsSigner(..) | Self::GcsSigner(..) => Username::none(),
+            Self::AwsSigner(..) | Self::GcsSigner(..) | Self::AzureSigner(..) => Username::none(),
         }
     }
 
@@ -463,7 +478,7 @@ impl Authentication {
     pub(crate) fn is_authenticated(&self) -> bool {
         match self {
             Self::Credentials(credentials) => credentials.is_authenticated(),
-            Self::AwsSigner(..) | Self::GcsSigner(..) => true,
+            Self::AwsSigner(..) | Self::GcsSigner(..) | Self::AzureSigner(..) => true,
         }
     }
 
@@ -471,7 +486,7 @@ impl Authentication {
     pub(crate) fn is_empty(&self) -> bool {
         match self {
             Self::Credentials(credentials) => credentials.is_empty(),
-            Self::AwsSigner(..) | Self::GcsSigner(..) => false,
+            Self::AwsSigner(..) | Self::GcsSigner(..) | Self::AzureSigner(..) => false,
         }
     }
 
@@ -527,6 +542,38 @@ impl Authentication {
                     .sign(&mut parts, None)
                     .await
                     .expect("GCS signing should succeed");
+
+                // Copy over the signed headers.
+                request.headers_mut().extend(parts.headers);
+
+                // Copy over the signed path and query, if any.
+                if let Some(path_and_query) = parts.uri.path_and_query() {
+                    request.url_mut().set_path(path_and_query.path());
+                    request.url_mut().set_query(path_and_query.query());
+                }
+                request
+            }
+            Self::AzureSigner(signer) => {
+                // Build an `http::Request` from the `reqwest::Request`.
+                // SAFETY: If we have a valid `reqwest::Request`, we expect (e.g.) the URL to be valid.
+                let uri = Uri::from_str(request.url().as_str()).unwrap();
+                let mut http_req = http::Request::builder()
+                    .method(request.method().clone())
+                    .uri(uri)
+                    .body(())
+                    .unwrap();
+                *http_req.headers_mut() = request.headers().clone();
+                http_req
+                    .headers_mut()
+                    .entry(HeaderName::from_static("x-ms-version"))
+                    .or_insert(HeaderValue::from_static(AZURE_STORAGE_VERSION));
+
+                // Sign the parts.
+                let (mut parts, ()) = http_req.into_parts();
+                signer
+                    .sign(&mut parts, None)
+                    .await
+                    .expect("Azure signing should succeed");
 
                 // Copy over the signed headers.
                 request.headers_mut().extend(parts.headers);
@@ -666,6 +713,36 @@ mod tests {
 
         assert_debug_snapshot!(header, @r#""Basic dXNlcjpwYXNzd29yZD09""#);
         assert_eq!(Credentials::from_header_value(&header), Some(credentials));
+    }
+
+    #[tokio::test]
+    async fn authenticated_request_with_azure_signer() {
+        let signer = reqsign::azure::default_signer().with_credential_provider(
+            reqsign::azure::StaticCredentialProvider::new_bearer_token("token"),
+        );
+        let authentication = Authentication::from(signer);
+
+        let request = Request::new(
+            reqwest::Method::GET,
+            Url::parse("https://account.blob.core.windows.net/container/blob.whl").unwrap(),
+        );
+        let request = authentication.authenticate(request).await;
+
+        let authorization = request
+            .headers()
+            .get(reqwest::header::AUTHORIZATION)
+            .expect("Authorization header should be set");
+        assert_eq!(authorization.to_str().unwrap(), "Bearer token");
+        assert!(request.headers().contains_key("x-ms-date"));
+        assert_eq!(
+            request
+                .headers()
+                .get("x-ms-version")
+                .expect("x-ms-version header should be set")
+                .to_str()
+                .unwrap(),
+            AZURE_STORAGE_VERSION
+        );
     }
 
     /// Passwords should be redacted in debug output.
